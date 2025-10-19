@@ -1,0 +1,54 @@
+/* App.css */
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+}
+
+h1 {
+  text-align: center;
+  color: #0f1a2c;
+  margin-bottom: 2rem;
+  font-weight: 700;
+  font-size: 2.5rem;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Add this to your existing table.css if needed */
+.routine-table {
+  margin-top: 2rem;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}
+/* Navbar styling */
+.navbar {
+  background-color: #71a3e4;
+  padding: 0;
+  margin-bottom: 20px;
+}
+
+.navbar ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.navbar li {
+  margin: 0;
+}
+
+.navbar a {
+  display: block;
+  color: white;
+  text-decoration: none;
+  padding: 15px 20px;
+  transition: background-color 0.3s;
+}
+
+.navbar a:hover,
+.navbar a.active {
+  background-color: #555;
+}
