@@ -28,7 +28,7 @@ function RoutineTable() {
   const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [error, setError] = useState('');
   const [activeCell, setActiveCell] = useState(null);
-  
+
   // CHANGE 2: New state to cache teachers per subject
   const [teachersCache, setTeachersCache] = useState({});
 
@@ -37,7 +37,7 @@ function RoutineTable() {
       try {
         const querySnapshot = await getDocs(collection(db, 'subjects'));
         const subjects = {};
-        
+
         // Preload all subjects first
         querySnapshot.forEach(doc => {
           subjects[doc.id] = {
@@ -45,7 +45,7 @@ function RoutineTable() {
             // CHANGE 3: Don't preload teachers - we'll fetch on demand
           };
         });
-        
+
         setSubjectsMap(subjects);
       } catch (err) {
         setError('Failed to load subjects.');
@@ -54,7 +54,7 @@ function RoutineTable() {
         setLoadingSubjects(false);
       }
     };
-    
+
     loadSubjects();
   }, []);
 
@@ -63,12 +63,12 @@ function RoutineTable() {
     try {
       const teachersRef = collection(db, 'subjects', subjectCode, 'teachers');
       const snapshot = await getDocs(teachersRef);
-      
+
       const teachers = {};
       snapshot.forEach(doc => {
         teachers[doc.id] = doc.data().name; // Store as { teacherId: teacherName }
       });
-      
+
       setTeachersCache(prev => ({
         ...prev,
         [subjectCode]: teachers
@@ -80,59 +80,59 @@ function RoutineTable() {
 
   const handleSubjectSelect = (dayIndex, timeIndex, subjectCode) => {
     // CHANGE 5: Reset teacher selection when subject changes
-    setSchedule(prev => 
+    setSchedule(prev =>
       prev.map((row, tIdx) =>
         tIdx === timeIndex && !row.isLunch
-          ? { 
-              ...row, 
-              subjects: row.subjects.map((cell, dIdx) => 
-                dIdx === dayIndex 
-                  ? { subjectCode, teacherId: '' } 
+          ? {
+              ...row,
+              subjects: row.subjects.map((cell, dIdx) =>
+                dIdx === dayIndex
+                  ? { subjectCode, teacherId: '' }
                   : cell
-              ) 
+              )
             }
           : row
       )
     );
-    
+
     // CHANGE 6: Load teachers for this subject
     if (subjectCode) {
       loadTeachersForSubject(subjectCode);
     }
-    
+
     setActiveCell({ dayIndex, timeIndex });
   };
 
   const handleTeacherSelect = (dayIndex, timeIndex, teacherId) => {
-    setSchedule(prev => 
+    setSchedule(prev =>
       prev.map((row, tIdx) =>
         tIdx === timeIndex && !row.isLunch
-          ? { 
-              ...row, 
-              subjects: row.subjects.map((cell, dIdx) => 
-                dIdx === dayIndex 
-                  ? { ...cell, teacherId } 
+          ? {
+              ...row,
+              subjects: row.subjects.map((cell, dIdx) =>
+                dIdx === dayIndex
+                  ? { ...cell, teacherId }
                   : cell
-              ) 
+              )
             }
           : row
       )
     );
-    
+
     setActiveCell(null);
   };
 
   const clearSelection = (dayIndex, timeIndex) => {
-    setSchedule(prev => 
+    setSchedule(prev =>
       prev.map((row, tIdx) =>
         tIdx === timeIndex && !row.isLunch
-          ? { 
-              ...row, 
-              subjects: row.subjects.map((cell, dIdx) => 
-                dIdx === dayIndex 
-                  ? { subjectCode: '', teacherId: '' } 
+          ? {
+              ...row,
+              subjects: row.subjects.map((cell, dIdx) =>
+                dIdx === dayIndex
+                  ? { subjectCode: '', teacherId: '' }
                   : cell
-              ) 
+              )
             }
           : row
       )
@@ -240,7 +240,7 @@ function RoutineTable() {
   return (
     <div className="table-container">
       <h2 className="table-title">Editable Weekly Schedule</h2>
-      
+
       <div className="table-wrapper">
         <table className="routine-table">
           <thead>
@@ -270,13 +270,13 @@ function RoutineTable() {
                   const cellData = row.subjects[dayIndex];
                   const subjectCode = cellData.subjectCode;
                   const teacherId = cellData.teacherId;
-                  
+
                   // CHANGE 8: Get subject info
                   const subject = subjectCode ? subjectsMap[subjectCode] : null;
-                  
+
                   // CHANGE 9: Get teachers for this subject from cache
                   const subjectTeachers = subjectCode ? teachersCache[subjectCode] || {} : {};
-                  
+
                   const isActive = activeCell?.dayIndex === dayIndex && activeCell?.timeIndex === timeIndex;
 
                   return (
@@ -325,12 +325,12 @@ function RoutineTable() {
                         </div>
                       ) : subjectCode ? (
                         // CHANGE 10: Display both subject and teacher name
-                        <div 
-                          className="cell-display" 
+                        <div
+                          className="cell-display"
                           onClick={() => setActiveCell({ dayIndex, timeIndex })}
                         >
                           <div className="subject-name">[{subjectCode}] {subject?.name}</div>
-                          
+
                           {/* CHANGE 11: Show teacher name by resolving from cache */}
                           {teacherId && subjectCode && (
                             <div className="teacher-name">
@@ -339,8 +339,8 @@ function RoutineTable() {
                           )}
                         </div>
                       ) : (
-                        <div 
-                          className="cell-placeholder" 
+                        <div
+                          className="cell-placeholder"
                           onClick={() => setActiveCell({ dayIndex, timeIndex })}
                         >
                           + Add Subject
@@ -358,8 +358,8 @@ function RoutineTable() {
       {/* NEW: Download button */}
       <button
         onClick={handleDownload}
-        className="btn-download" // Add this class to your table.css for styling
-        style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+        className="btn-download"
+
       >
         Download as DOCX
       </button>
@@ -368,3 +368,5 @@ function RoutineTable() {
 }
 
 export default RoutineTable;
+
+
