@@ -4,6 +4,10 @@ import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import './table.css';
 
+// NEW: Import libraries for DOCX generation and file saving
+import { Packer, Document, Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle, AlignmentType, VerticalAlign } from 'docx';
+import { saveAs } from 'file-saver';
+
 function RoutineTable() {
   // CHANGE 1: Initialize schedule with objects instead of strings
   const [schedule, setSchedule] = useState([
@@ -134,6 +138,80 @@ function RoutineTable() {
       )
     );
     setActiveCell(null);
+  };
+
+  // NEW: Function to generate and download DOCX
+  const handleDownload = () => {
+    // Create a new DOCX document
+    const doc = new Document({
+      sections: [{
+        children: [
+          new Paragraph({
+            text: 'Editable Weekly Schedule',
+            heading: 'Heading1', // Title
+            alignment: AlignmentType.CENTER,
+          }),
+          new Paragraph({}), // Empty line for spacing
+
+          // Create the table
+          new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE }, // Full width
+            borders: {
+              top: { style: BorderStyle.SINGLE, size: 1 },
+              bottom: { style: BorderStyle.SINGLE, size: 1 },
+              left: { style: BorderStyle.SINGLE, size: 1 },
+              right: { style: BorderStyle.SINGLE, size: 1 },
+            },
+            rows: [
+              // Header row: Day + Time slots
+              new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph('Day')] }),
+                  ...timeHeaders.map(time => new TableCell({ children: [new Paragraph(time)] })),
+                ],
+              }),
+              // Data rows: One for each day
+              ...days.map((day, dayIndex) => new TableRow({
+                children: [
+                  new TableCell({ children: [new Paragraph(day)] }), // Day column
+                  ...schedule.map((row, timeIndex) => {
+                    if (row.isLunch) {
+                      return new TableCell({
+                        children: [new Paragraph(row.lunchText)],
+                        verticalAlign: VerticalAlign.CENTER,
+                      });
+                    }
+
+                    const cellData = row.subjects[dayIndex];
+                    const subjectCode = cellData.subjectCode;
+                    const teacherId = cellData.teacherId;
+                    const subject = subjectCode ? subjectsMap[subjectCode] : null;
+                    const subjectTeachers = subjectCode ? teachersCache[subjectCode] || {} : {};
+
+                    const cellText = subjectCode
+                      ? `[${subjectCode}] ${subject?.name || 'Unknown'}\n${teacherId ? (subjectTeachers[teacherId] || 'Teacher not found') : ''}`
+                      : 'No Subject';
+
+                    return new TableCell({
+                      children: [new Paragraph(cellText)],
+                      verticalAlign: VerticalAlign.CENTER,
+                    });
+                  }),
+                ],
+              })),
+            ],
+          }),
+        ],
+      }],
+    });
+
+    // Generate the DOCX blob and download it
+    Packer.toBlob(doc).then(blob => {
+      saveAs(blob, 'weekly_schedule.docx');
+    }).catch(err => {
+      console.error('Error generating DOCX:', err);
+      alert('Failed to generate DOCX. Please try again.');
+    });
   };
 
   if (loadingSubjects) {
@@ -276,6 +354,15 @@ function RoutineTable() {
           </tbody>
         </table>
       </div>
+
+      {/* NEW: Download button */}
+      <button
+        onClick={handleDownload}
+        className="btn-download" // Add this class to your table.css for styling
+        style={{ marginTop: '20px', padding: '10px 20px', backgroundColor: '#007BFF', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}
+      >
+        Download as DOCX
+      </button>
     </div>
   );
 }
