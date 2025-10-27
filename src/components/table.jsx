@@ -4,12 +4,12 @@ import { db } from '../firebase';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import './table.css';
 
-// NEW: Import libraries for DOCX generation and file saving
+//  Import libraries for DOCX generation and file saving
 import { Packer, Document, Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle, AlignmentType, VerticalAlign } from 'docx';
 import { saveAs } from 'file-saver';
 
 function RoutineTable() {
-  // CHANGE 1: Initialize schedule with objects instead of strings
+  // Initialize schedule with objects instead of strings
   const [schedule, setSchedule] = useState([
     { time: '9:00 - 10:00', subjects: Array(5).fill({ subjectCode: '', teacherId: '' }) },
     { time: '10:00 - 11:00', subjects: Array(5).fill({ subjectCode: '', teacherId: '' }) },
@@ -29,7 +29,7 @@ function RoutineTable() {
   const [error, setError] = useState('');
   const [activeCell, setActiveCell] = useState(null);
 
-  // CHANGE 2: New state to cache teachers per subject
+  //  New state to cache teachers per subject
   const [teachersCache, setTeachersCache] = useState({});
 
   useEffect(() => {
@@ -42,7 +42,7 @@ function RoutineTable() {
         querySnapshot.forEach(doc => {
           subjects[doc.id] = {
             name: doc.data().name || 'Unknown',
-            // CHANGE 3: Don't preload teachers - we'll fetch on demand
+            //  Don't preload teachers - we'll fetch on demand
           };
         });
 
@@ -79,7 +79,7 @@ function RoutineTable() {
   };
 
   const handleSubjectSelect = (dayIndex, timeIndex, subjectCode) => {
-    // CHANGE 5: Reset teacher selection when subject changes
+    //  Reset teacher selection when subject changes
     setSchedule(prev =>
       prev.map((row, tIdx) =>
         tIdx === timeIndex && !row.isLunch
