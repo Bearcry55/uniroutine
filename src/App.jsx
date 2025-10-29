@@ -6,7 +6,7 @@ import './App.css';
 // Page components
 import Home from './components/home';
 import Form from './components/form';          
-import RoutineTable from './components/table';
+import RoutineManager from './components/RoutineManager'; // hope this is working 
 import AboutUs from './components/AboutUs';
 
 function App() {
@@ -17,7 +17,7 @@ function App() {
         <ul>
           <li><Link to="/">Home</Link></li>
           <li><Link to="/form">Add Subject</Link></li>
-          <li><Link to="/table">View Routine</Link></li>
+          <li><Link to="/table">View Routine</Link></li> {/* URL stays same */}
           <li><Link to="/about">About Us</Link></li>
         </ul>
       </nav>
@@ -26,8 +26,8 @@ function App() {
       <div className="app-container">
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/form" element={<Form />} /> {/* No props needed */}
-          <Route path="/table" element={<RoutineTable />} />
+          <Route path="/form" element={<Form />} />
+          <Route path="/table" element={<RoutineManager />} />
           <Route path="/about" element={<AboutUs />} />
         </Routes>
       </div>

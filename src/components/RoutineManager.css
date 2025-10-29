@@ -1,0 +1,38 @@
+.routine-manager h1 {
+  font-size: 28px;
+  margin-bottom: 10px;
+}
+
+.routine-manager p {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 20px;
+}
+/* src/components/RoutineManager.css */
+.routine-manager {
+  padding: 20px;
+}
+
+.add-routine-btn {
+  padding: 10px 20px;
+  font-size: 16px;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.add-routine-btn:hover {
+  background-color: #45a049;
+}
+
+.routine-block {
+  border: 2px solid #ccc;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 30px;
+  background-color: #f9f9f9;
+}

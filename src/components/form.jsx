@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, doc, setDoc, addDoc } from 'firebase/firestore';
+import * as ExcelJS from 'exceljs';
 import './form.css';
 
 function Form() {
@@ -13,6 +14,11 @@ function Form() {
 
   // List of all subjects for the dropdown
   const [allSubjects, setAllSubjects] = useState([]);
+
+  // Excel import state
+  const [excelFile, setExcelFile] = useState(null);
+  const [excelData, setExcelData] = useState([]);
+  const [importStatus, setImportStatus] = useState([]);
 
   // General component state
   const [status, setStatus] = useState('');
@@ -112,6 +118,231 @@ function Form() {
     }
   };
 
+  // Handler for Excel file selection
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    
+    // Validate file type
+    if (file) {
+      const validTypes = [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel'
+      ];
+      
+      if (!validTypes.includes(file.type) && !file.name.endsWith('.xlsx')) {
+        setStatus('⚠️ Please select a valid Excel file (.xlsx format)');
+        setExcelFile(null);
+        e.target.value = null;
+        return;
+      }
+      
+      setExcelFile(file);
+      setStatus('');
+      setImportStatus([]);
+    }
+  };
+
+  // Handler for reading and previewing Excel data using ExcelJS
+  const handleFileRead = async () => {
+    if (!excelFile) {
+      setStatus('⚠️ Please select an Excel file first');
+      return;
+    }
+
+    try {
+      setStatus('Reading file...');
+      
+      const arrayBuffer = await excelFile.arrayBuffer();
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(arrayBuffer);
+      
+      const worksheet = workbook.worksheets[0];
+      
+      if (!worksheet) {
+        setStatus('⚠️ No worksheet found in the Excel file');
+        return;
+      }
+      
+      const processedData = [];
+      const errors = [];
+      
+      // Get headers from the first row
+      const headerRow = worksheet.getRow(1);
+      const headers = [];
+      headerRow.eachCell((cell, colNumber) => {
+        headers[colNumber - 1] = cell.value ? cell.value.toString().toLowerCase().trim() : '';
+      });
+      
+      // Find column indices for our required fields
+      const codeIndex = headers.findIndex(h => 
+        h.includes('code') || h.includes('subject code') || h === 'subjectcode'
+      ) + 1;
+      const nameIndex = headers.findIndex(h => 
+        h.includes('subject name') || h === 'subjectname' || (h.includes('name') && !h.includes('teacher'))
+      ) + 1;
+      const teacherIndex = headers.findIndex(h => 
+        h.includes('teacher') || h.includes('instructor') || h.includes('faculty')
+      ) + 1;
+      
+      if (codeIndex === 0 || nameIndex === 0) {
+        setStatus('⚠️ Excel file must have "Subject Code" and "Subject Name" columns');
+        return;
+      }
+      
+      // Process data rows (starting from row 2)
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return; // Skip header row
+        
+        const subjectCode = row.getCell(codeIndex).value;
+        const subjectName = row.getCell(nameIndex).value;
+        const teacherName = teacherIndex > 0 ? row.getCell(teacherIndex).value : '';
+        
+        // Convert to string and trim
+        const trimmedCode = subjectCode ? subjectCode.toString().trim() : '';
+        const trimmedName = subjectName ? subjectName.toString().trim() : '';
+        const trimmedTeacher = teacherName ? teacherName.toString().trim() : '';
+        
+        // Skip empty rows
+        if (!trimmedCode && !trimmedName && !trimmedTeacher) {
+          return;
+        }
+        
+        // Validate row
+        if (!trimmedCode || !trimmedName) {
+          errors.push(`Row ${rowNumber}: Missing subject code or name`);
+          return;
+        }
+        
+        if (trimmedCode.includes('/')) {
+          errors.push(`Row ${rowNumber}: Subject code cannot contain '/' character`);
+          return;
+        }
+        
+        processedData.push({
+          code: trimmedCode,
+          name: trimmedName,
+          teacher: trimmedTeacher,
+          rowNumber: rowNumber
+        });
+      });
+      
+      if (errors.length > 0) {
+        setStatus('⚠️ Validation errors:\n' + errors.join('\n'));
+        return;
+      }
+      
+      if (processedData.length === 0) {
+        setStatus('⚠️ No valid data found in the Excel file');
+        return;
+      }
+      
+      setExcelData(processedData);
+      setStatus(`✅ Found ${processedData.length} valid rows. Click "Import Data" to proceed.`);
+      
+    } catch (error) {
+      console.error('Error reading file:', error);
+      setStatus(`❌ Error reading file: ${error.message}`);
+    }
+  };
+
+  // Handler for importing data to Firebase
+  const handleImportData = async () => {
+    if (excelData.length === 0) {
+      setStatus('⚠️ No data to import. Please read the file first.');
+      return;
+    }
+
+    setIsSaving(true);
+    setStatus('Importing data...');
+    const results = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const row of excelData) {
+        try {
+          // Save/Update subject
+          const subjectRef = doc(db, 'subjects', row.code);
+          await setDoc(subjectRef, { name: row.name }, { merge: true });
+          
+          // If teacher name exists, add teacher to the subject
+          if (row.teacher) {
+            const teachersSubcollectionRef = collection(db, 'subjects', row.code, 'teachers');
+            await addDoc(teachersSubcollectionRef, { name: row.teacher });
+            results.push(`✅ Row ${row.rowNumber}: Subject '${row.code}' and teacher '${row.teacher}' imported`);
+          } else {
+            results.push(`✅ Row ${row.rowNumber}: Subject '${row.code}' imported (no teacher)`);
+          }
+          successCount++;
+          
+        } catch (error) {
+          results.push(`❌ Row ${row.rowNumber}: Failed - ${error.message}`);
+          errorCount++;
+        }
+      }
+      
+      setImportStatus(results);
+      setStatus(`Import complete: ${successCount} successful, ${errorCount} failed`);
+      
+      // Clear the file input and data
+      setExcelFile(null);
+      setExcelData([]);
+      
+      // Reload subjects for the dropdown
+      await loadSubjects();
+      
+      // Clear file input
+      const fileInput = document.getElementById('excelFileInput');
+      if (fileInput) fileInput.value = '';
+      
+    } catch (error) {
+      console.error('Error during import:', error);
+      setStatus(`❌ Import failed: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Function to download sample Excel template
+  const downloadTemplate = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Subjects');
+    
+    // Add headers
+    worksheet.columns = [
+      { header: 'Subject Code', key: 'code', width: 15 },
+      { header: 'Subject Name', key: 'name', width: 30 },
+      { header: 'Teacher', key: 'teacher', width: 25 }
+    ];
+    
+    // Style the header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+    
+    // Add sample data
+    worksheet.addRows([
+      { code: 'CS101', name: 'Introduction to Programming', teacher: 'Dr. Smith' },
+      { code: 'MATH201', name: 'Calculus II', teacher: 'Prof. Johnson' },
+      { code: 'PHY301', name: 'Quantum Physics', teacher: 'Dr. Brown' }
+    ]);
+    
+    // Generate Excel file
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { 
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'subjects_template.xlsx';
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="form-container">
       {/* ===== FORM 1: ADD/UPDATE SUBJECT ===== */}
@@ -184,10 +415,77 @@ function Form() {
           </button>
         </form>
       </div>
+
+      <hr className="form-divider" />
+
+      {/* ===== FORM 3: IMPORT FROM EXCEL ===== */}
+      <div className="form-section">
+        <h2>3. Import from Excel</h2>
+        <div className="excel-import-info">
+          <p>📋 Excel format required:</p>
+          <ul>
+            <li>Column 1: Subject Code</li>
+            <li>Column 2: Subject Name</li>
+            <li>Column 3: Teacher (optional)</li>
+          </ul>
+          <button 
+            type="button" 
+            className="btn-download-template"
+            onClick={downloadTemplate}
+          >
+            📥 Download Sample Template
+          </button>
+        </div>
+        
+        <div className="form-group">
+          <label htmlFor="excelFileInput">Select Excel File (.xlsx)</label>
+          <input
+            id="excelFileInput"
+            type="file"
+            accept=".xlsx"
+            onChange={handleFileChange}
+            disabled={isSaving}
+          />
+        </div>
+        
+        <div className="excel-buttons">
+          <button 
+            type="button" 
+            className="btn-preview" 
+            onClick={handleFileRead}
+            disabled={!excelFile || isSaving}
+          >
+            📖 Read File
+          </button>
+          
+          <button 
+            type="button" 
+            className="btn-import" 
+            onClick={handleImportData}
+            disabled={excelData.length === 0 || isSaving}
+          >
+            {isSaving ? 'Importing...' : '📥 Import Data'}
+          </button>
+        </div>
+        
+        {/* Import Results */}
+        {importStatus.length > 0 && (
+          <div className="import-results">
+            <h4>Import Results:</h4>
+            <ul>
+              {importStatus.map((result, index) => (
+                <li key={index} className={result.startsWith('✅') ? 'success-item' : 'error-item'}>
+                  {result}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
       
       {/* ----- Universal Status Message Area ----- */}
       {status && (
-        <div className={`status-message ${status.startsWith('✅') ? 'success' : 'error'}`}>
+        <div className={`status-message ${status.startsWith('✅') ? 'success' : status.startsWith('⚠️') ? 'warning' : 'error'}`}>
           <pre>{status}</pre>
         </div>
       )}
