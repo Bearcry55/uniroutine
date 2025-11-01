@@ -36,8 +36,9 @@ function RoutineTable({
   const [activeCell, setActiveCell] = useState(null);
   const [teachersCache, setTeachersCache] = useState({});
   
-  // New state for conflict warnings
-  const [conflictWarning, setConflictWarning] = useState(null);
+  // State to show user feedback when an assignment is blocked
+  const [feedbackMessage, setFeedbackMessage] = useState(null);
+
 
   useEffect(() => {
     const loadSubjects = async () => {
@@ -111,34 +112,38 @@ function RoutineTable({
     }
 
     setActiveCell({ dayIndex, timeIndex });
-    setConflictWarning(null); // Clear any existing warning
+    setFeedbackMessage(null); // Clear any existing warning
   };
 
   const handleTeacherSelect = (dayIndex, timeIndex, teacherId) => {
     const timeSlot = schedule[timeIndex].time;
     const prevTeacherId = schedule[timeIndex].subjects[dayIndex].teacherId;
-    
-    // Check if teacher is available
+    const subjectData = schedule[timeIndex].subjects[dayIndex];
+    const teacherName = teachersCache[subjectData.subjectCode]?.[teacherId] || 'Selected Teacher';
+
+    // 1. STRICT BLOCKING CHECK: If teacherId is present AND they are not available, block assignment.
     if (teacherId && !isTeacherAvailable(routineId, dayIndex, timeSlot, teacherId)) {
-      const conflictingRoutine = getConflictingRoutine(routineId, dayIndex, timeSlot, teacherId);
-      const teacherName = teachersCache[schedule[timeIndex].subjects[dayIndex].subjectCode]?.[teacherId] || 'Teacher';
+      const conflictingRoutineNumber = getConflictingRoutine(routineId, dayIndex, timeSlot, teacherId);
       
-      setConflictWarning({
-        message: `⚠️ ${teacherName} is already assigned to Routine ${conflictingRoutine} at ${timeSlot} on ${days[dayIndex]}`,
-        dayIndex,
-        timeIndex
+      setFeedbackMessage({
+        type: 'error',
+        message: `🛑 Cannot assign ${teacherName}. They are already scheduled in Routine ${conflictingRoutineNumber} at this time.`
       });
       
-      // Optional: Still allow the assignment but show warning
-      // If you want to prevent assignment, add return here:
-      // return;
-    } else {
-      setConflictWarning(null);
-    }
+      // Close the active cell editor immediately upon blocking
+      setActiveCell(null);
+      return; 
+    } 
     
+    // If teacherId is empty (clearing teacher), or if available (no conflict):
+    
+    // Clear any previous feedback/warnings
+    setFeedbackMessage(null); 
+
     // Update global teacher schedule
     updateTeacherSchedule(routineId, dayIndex, timeSlot, teacherId, prevTeacherId);
     
+    // Update local schedule state
     setSchedule(prev =>
       prev.map((row, tIdx) =>
         tIdx === timeIndex && !row.isLunch
@@ -181,7 +186,7 @@ function RoutineTable({
       )
     );
     setActiveCell(null);
-    setConflictWarning(null);
+    setFeedbackMessage(null);
   };
 
   const handleDownload = () => {
@@ -279,10 +284,10 @@ function RoutineTable({
     <div className="table-container">
       <h2 className="table-title">Editable Weekly Schedule</h2>
       
-      {/* Show conflict warning if exists */}
-      {conflictWarning && (
-        <div className="conflict-warning">
-          {conflictWarning.message}
+      {/* Show feedback message (Error/Warning when selecting teacher) */}
+      {feedbackMessage && (
+        <div className={`conflict-warning ${feedbackMessage.type === 'error' ? 'feedback-error' : ''}`}>
+          {feedbackMessage.message}
         </div>
       )}
 
@@ -318,7 +323,7 @@ function RoutineTable({
                   const subjectTeachers = subjectCode ? teachersCache[subjectCode] || {} : {};
                   const isActive = activeCell?.dayIndex === dayIndex && activeCell?.timeIndex === timeIndex;
                   
-                  // Check if this cell has a teacher conflict
+                  // Check if this cell currently displays a conflict
                   const hasConflict = teacherId && !isTeacherAvailable(routineId, dayIndex, row.time, teacherId);
 
                   return (
