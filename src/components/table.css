@@ -292,3 +292,61 @@
 .btn-download:hover {
   background-color: #0056b3;
 }
+/* Conflict warning styles */
+.conflict-warning {
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  color: #856404;
+  padding: 10px 15px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  font-weight: 500;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Cell with conflict */
+.subject-cell.has-conflict {
+  position: relative;
+}
+
+.subject-cell.has-conflict::after {
+  content: '⚠️';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 12px;
+}
+
+.conflict-cell {
+  border: 2px solid #ffc107 !important;
+  background-color: #fff9e6;
+}
+
+.conflict-indicator {
+  color: #ff6b6b;
+  font-weight: bold;
+  margin-left: 5px;
+}
+
+/* Unavailable teacher in dropdown */
+.teacher-select option.teacher-unavailable {
+  color: #ff6b6b;
+  font-style: italic;
+}
+
+/* Visual feedback for conflicts */
+.cell-display.conflict-cell:hover {
+  background-color: #fff3cd;
+  cursor: pointer;
+}

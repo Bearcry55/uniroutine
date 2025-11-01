@@ -8,7 +8,13 @@ import './table.css';
 import { Packer, Document, Table, TableRow, TableCell, Paragraph, WidthType, BorderStyle, AlignmentType, VerticalAlign } from 'docx';
 import { saveAs } from 'file-saver';
 
-function RoutineTable() {
+function RoutineTable({ 
+  routineId = 1, 
+  routineNumber = 1,
+  updateTeacherSchedule = () => {}, 
+  isTeacherAvailable = () => true,
+  getConflictingRoutine = () => null 
+}) {
   // Initialize schedule with objects instead of strings
   const [schedule, setSchedule] = useState([
     { time: '9:00 - 10:00', subjects: Array(5).fill({ subjectCode: '', teacherId: '' }) },
@@ -28,9 +34,10 @@ function RoutineTable() {
   const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [error, setError] = useState('');
   const [activeCell, setActiveCell] = useState(null);
-
-  //  New state to cache teachers per subject
   const [teachersCache, setTeachersCache] = useState({});
+  
+  // New state for conflict warnings
+  const [conflictWarning, setConflictWarning] = useState(null);
 
   useEffect(() => {
     const loadSubjects = async () => {
@@ -38,11 +45,9 @@ function RoutineTable() {
         const querySnapshot = await getDocs(collection(db, 'subjects'));
         const subjects = {};
 
-        // Preload all subjects first
         querySnapshot.forEach(doc => {
           subjects[doc.id] = {
             name: doc.data().name || 'Unknown',
-            //  Don't preload teachers - we'll fetch on demand
           };
         });
 
@@ -58,7 +63,6 @@ function RoutineTable() {
     loadSubjects();
   }, []);
 
-  // CHANGE 4: New function to load teachers for a specific subject
   const loadTeachersForSubject = async (subjectCode) => {
     try {
       const teachersRef = collection(db, 'subjects', subjectCode, 'teachers');
@@ -66,7 +70,7 @@ function RoutineTable() {
 
       const teachers = {};
       snapshot.forEach(doc => {
-        teachers[doc.id] = doc.data().name; // Store as { teacherId: teacherName }
+        teachers[doc.id] = doc.data().name;
       });
 
       setTeachersCache(prev => ({
@@ -79,7 +83,14 @@ function RoutineTable() {
   };
 
   const handleSubjectSelect = (dayIndex, timeIndex, subjectCode) => {
-    //  Reset teacher selection when subject changes
+    // Get previous teacher ID before updating
+    const prevTeacherId = schedule[timeIndex].subjects[dayIndex].teacherId;
+    
+    // If clearing subject, also clear teacher from global schedule
+    if (!subjectCode && prevTeacherId) {
+      updateTeacherSchedule(routineId, dayIndex, schedule[timeIndex].time, null, prevTeacherId);
+    }
+    
     setSchedule(prev =>
       prev.map((row, tIdx) =>
         tIdx === timeIndex && !row.isLunch
@@ -95,15 +106,39 @@ function RoutineTable() {
       )
     );
 
-    // CHANGE 6: Load teachers for this subject
     if (subjectCode) {
       loadTeachersForSubject(subjectCode);
     }
 
     setActiveCell({ dayIndex, timeIndex });
+    setConflictWarning(null); // Clear any existing warning
   };
 
   const handleTeacherSelect = (dayIndex, timeIndex, teacherId) => {
+    const timeSlot = schedule[timeIndex].time;
+    const prevTeacherId = schedule[timeIndex].subjects[dayIndex].teacherId;
+    
+    // Check if teacher is available
+    if (teacherId && !isTeacherAvailable(routineId, dayIndex, timeSlot, teacherId)) {
+      const conflictingRoutine = getConflictingRoutine(routineId, dayIndex, timeSlot, teacherId);
+      const teacherName = teachersCache[schedule[timeIndex].subjects[dayIndex].subjectCode]?.[teacherId] || 'Teacher';
+      
+      setConflictWarning({
+        message: `⚠️ ${teacherName} is already assigned to Routine ${conflictingRoutine} at ${timeSlot} on ${days[dayIndex]}`,
+        dayIndex,
+        timeIndex
+      });
+      
+      // Optional: Still allow the assignment but show warning
+      // If you want to prevent assignment, add return here:
+      // return;
+    } else {
+      setConflictWarning(null);
+    }
+    
+    // Update global teacher schedule
+    updateTeacherSchedule(routineId, dayIndex, timeSlot, teacherId, prevTeacherId);
+    
     setSchedule(prev =>
       prev.map((row, tIdx) =>
         tIdx === timeIndex && !row.isLunch
@@ -123,6 +158,14 @@ function RoutineTable() {
   };
 
   const clearSelection = (dayIndex, timeIndex) => {
+    const prevTeacherId = schedule[timeIndex].subjects[dayIndex].teacherId;
+    const timeSlot = schedule[timeIndex].time;
+    
+    // Clear from global schedule
+    if (prevTeacherId) {
+      updateTeacherSchedule(routineId, dayIndex, timeSlot, null, prevTeacherId);
+    }
+    
     setSchedule(prev =>
       prev.map((row, tIdx) =>
         tIdx === timeIndex && !row.isLunch
@@ -138,24 +181,22 @@ function RoutineTable() {
       )
     );
     setActiveCell(null);
+    setConflictWarning(null);
   };
 
-  // NEW: Function to generate and download DOCX
   const handleDownload = () => {
-    // Create a new DOCX document
     const doc = new Document({
       sections: [{
         children: [
           new Paragraph({
-            text: 'Editable Weekly Schedule',
-            heading: 'Heading1', // Title
+            text: `Editable Weekly Schedule - Routine ${routineNumber}`,
+            heading: 'Heading1',
             alignment: AlignmentType.CENTER,
           }),
-          new Paragraph({}), // Empty line for spacing
+          new Paragraph({}),
 
-          // Create the table
           new Table({
-            width: { size: 100, type: WidthType.PERCENTAGE }, // Full width
+            width: { size: 100, type: WidthType.PERCENTAGE },
             borders: {
               top: { style: BorderStyle.SINGLE, size: 1 },
               bottom: { style: BorderStyle.SINGLE, size: 1 },
@@ -163,17 +204,15 @@ function RoutineTable() {
               right: { style: BorderStyle.SINGLE, size: 1 },
             },
             rows: [
-              // Header row: Day + Time slots
               new TableRow({
                 children: [
                   new TableCell({ children: [new Paragraph('Day')] }),
                   ...timeHeaders.map(time => new TableCell({ children: [new Paragraph(time)] })),
                 ],
               }),
-              // Data rows: One for each day
               ...days.map((day, dayIndex) => new TableRow({
                 children: [
-                  new TableCell({ children: [new Paragraph(day)] }), // Day column
+                  new TableCell({ children: [new Paragraph(day)] }),
                   ...schedule.map((row, timeIndex) => {
                     if (row.isLunch) {
                       return new TableCell({
@@ -205,9 +244,8 @@ function RoutineTable() {
       }],
     });
 
-    // Generate the DOCX blob and download it
     Packer.toBlob(doc).then(blob => {
-      saveAs(blob, 'weekly_schedule.docx');
+      saveAs(blob, `weekly_schedule_routine_${routineNumber}.docx`);
     }).catch(err => {
       console.error('Error generating DOCX:', err);
       alert('Failed to generate DOCX. Please try again.');
@@ -240,6 +278,13 @@ function RoutineTable() {
   return (
     <div className="table-container">
       <h2 className="table-title">Editable Weekly Schedule</h2>
+      
+      {/* Show conflict warning if exists */}
+      {conflictWarning && (
+        <div className="conflict-warning">
+          {conflictWarning.message}
+        </div>
+      )}
 
       <div className="table-wrapper">
         <table className="routine-table">
@@ -266,24 +311,23 @@ function RoutineTable() {
                     );
                   }
 
-                  // CHANGE 7: Get cell data as object
                   const cellData = row.subjects[dayIndex];
                   const subjectCode = cellData.subjectCode;
                   const teacherId = cellData.teacherId;
-
-                  // CHANGE 8: Get subject info
                   const subject = subjectCode ? subjectsMap[subjectCode] : null;
-
-                  // CHANGE 9: Get teachers for this subject from cache
                   const subjectTeachers = subjectCode ? teachersCache[subjectCode] || {} : {};
-
                   const isActive = activeCell?.dayIndex === dayIndex && activeCell?.timeIndex === timeIndex;
+                  
+                  // Check if this cell has a teacher conflict
+                  const hasConflict = teacherId && !isTeacherAvailable(routineId, dayIndex, row.time, teacherId);
 
                   return (
-                    <td key={timeIndex} className="subject-cell">
+                    <td 
+                      key={timeIndex} 
+                      className={`subject-cell ${hasConflict ? 'has-conflict' : ''}`}
+                    >
                       {isActive ? (
                         <div className="tree-dropdown">
-                          {/* Step 1: Subject */}
                           <select
                             value={subjectCode}
                             onChange={(e) => handleSubjectSelect(dayIndex, timeIndex, e.target.value)}
@@ -298,7 +342,6 @@ function RoutineTable() {
                             ))}
                           </select>
 
-                          {/* Step 2: Teacher (only if subject selected) */}
                           {subjectCode && Object.keys(subjectTeachers).length > 0 && (
                             <select
                               value={teacherId}
@@ -306,15 +349,23 @@ function RoutineTable() {
                               className="teacher-select"
                             >
                               <option value="">-- Select Teacher --</option>
-                              {Object.entries(subjectTeachers).map(([id, name]) => (
-                                <option key={id} value={id}>
-                                  {name}
-                                </option>
-                              ))}
+                              {Object.entries(subjectTeachers).map(([id, name]) => {
+                                const isUnavailable = !isTeacherAvailable(routineId, dayIndex, row.time, id);
+                                const conflictRoutine = isUnavailable ? getConflictingRoutine(routineId, dayIndex, row.time, id) : null;
+                                
+                                return (
+                                  <option 
+                                    key={id} 
+                                    value={id}
+                                    className={isUnavailable ? 'teacher-unavailable' : ''}
+                                  >
+                                    {name} {isUnavailable ? `(⚠️ Routine ${conflictRoutine})` : ''}
+                                  </option>
+                                );
+                              })}
                             </select>
                           )}
 
-                          {/* Optional: Clear button */}
                           <button
                             type="button"
                             className="btn-clear"
@@ -324,17 +375,17 @@ function RoutineTable() {
                           </button>
                         </div>
                       ) : subjectCode ? (
-                        // CHANGE 10: Display both subject and teacher name
                         <div
-                          className="cell-display"
+                          className={`cell-display ${hasConflict ? 'conflict-cell' : ''}`}
                           onClick={() => setActiveCell({ dayIndex, timeIndex })}
                         >
                           <div className="subject-name">[{subjectCode}] {subject?.name}</div>
-
-                          {/* CHANGE 11: Show teacher name by resolving from cache */}
                           {teacherId && subjectCode && (
                             <div className="teacher-name">
                               {subjectTeachers[teacherId] || 'Teacher not found'}
+                              {hasConflict && (
+                                <span className="conflict-indicator"> ⚠️</span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -355,11 +406,9 @@ function RoutineTable() {
         </table>
       </div>
 
-      {/* NEW: Download button */}
       <button
         onClick={handleDownload}
         className="btn-download"
-
       >
         Download as DOCX
       </button>
@@ -368,5 +417,3 @@ function RoutineTable() {
 }
 
 export default RoutineTable;
-
-
