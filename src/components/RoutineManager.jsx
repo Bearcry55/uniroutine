@@ -4,9 +4,10 @@ import RoutineTable from "./table";
 import "./RoutineManager.css";
 
 function RoutineManager() {
-  const [routines, setRoutines] = useState([1]); // Start with one routine
+  // Start with one routine
+  const [routines, setRoutines] = useState([1]);
 
-  // Track teacher assignments across all routines
+  // Track all teacher assignments across routines
   // Format: { teacherId: { "dayIndex-timeSlot": [routineIds] } }
   const [teacherSchedules, setTeacherSchedules] = useState({});
 
@@ -19,28 +20,32 @@ function RoutineManager() {
   const handleDeleteRoutine = (routineId) => {
     if (!window.confirm("Are you sure you want to delete this routine?")) return;
 
-    // remove routine from list
+    // Remove from list
     setRoutines((prev) => prev.filter((id) => id !== routineId));
 
-    // clean teacherSchedules of this routine
+    // Clean teacherSchedules of this routine
     setTeacherSchedules((prev) => {
       const updated = { ...prev };
+
       Object.keys(updated).forEach((teacherId) => {
-        Object.keys(updated[teacherId]).forEach((timeKey) => {
-          updated[teacherId][timeKey] = updated[teacherId][timeKey].filter(
+        Object.keys(updated[teacherId]).forEach((key) => {
+          updated[teacherId][key] = updated[teacherId][key].filter(
             (id) => id !== routineId
           );
-          if (updated[teacherId][timeKey].length === 0)
-            delete updated[teacherId][timeKey];
+          if (updated[teacherId][key].length === 0) {
+            delete updated[teacherId][key];
+          }
         });
-        if (Object.keys(updated[teacherId]).length === 0)
+        if (Object.keys(updated[teacherId]).length === 0) {
           delete updated[teacherId];
+        }
       });
+
       return updated;
     });
   };
 
-  // 🔄 Update teacher schedule when assigning/removing
+  // 🔄 Update teacher schedule when a teacher is assigned or removed
   const updateTeacherSchedule = (
     routineId,
     dayIndex,
@@ -51,54 +56,57 @@ function RoutineManager() {
     setTeacherSchedules((prev) => {
       const updated = { ...prev };
 
-      // remove previous teacher assignment if it exists
+      // Remove previous teacher assignment if exists
       if (prevTeacherId && updated[prevTeacherId]) {
         const key = `${dayIndex}-${timeSlot}`;
         if (updated[prevTeacherId][key]) {
           updated[prevTeacherId][key] = updated[prevTeacherId][key].filter(
             (id) => id !== routineId
           );
-          if (updated[prevTeacherId][key].length === 0)
+          if (updated[prevTeacherId][key].length === 0) {
             delete updated[prevTeacherId][key];
-          if (Object.keys(updated[prevTeacherId]).length === 0)
+          }
+          if (Object.keys(updated[prevTeacherId]).length === 0) {
             delete updated[prevTeacherId];
+          }
         }
       }
 
-      // add new assignment
+      // Add new teacher assignment
       if (teacherId) {
         const key = `${dayIndex}-${timeSlot}`;
         if (!updated[teacherId]) updated[teacherId] = {};
         if (!updated[teacherId][key]) updated[teacherId][key] = [];
-        if (!updated[teacherId][key].includes(routineId))
+        if (!updated[teacherId][key].includes(routineId)) {
           updated[teacherId][key].push(routineId);
+        }
       }
 
       return updated;
     });
   };
 
-  // ✅ Check teacher availability
+  // ✅ Check if a teacher is available for a given slot
   const isTeacherAvailable = (routineId, dayIndex, timeSlot, teacherId) => {
     if (!teacherSchedules[teacherId]) return true;
     const key = `${dayIndex}-${timeSlot}`;
-    const assigned = teacherSchedules[teacherId][key] || [];
+    const list = teacherSchedules[teacherId][key] || [];
     return (
-      assigned.length === 0 ||
-      (assigned.length === 1 && assigned[0] === routineId)
+      list.length === 0 || (list.length === 1 && list[0] === routineId)
     );
   };
 
-  // ⚠️ Find conflicting routine for a teacher
+  // ⚠️ Identify if another routine conflicts with this teacher/time
   const getConflictingRoutine = (routineId, dayIndex, timeSlot, teacherId) => {
     if (!teacherSchedules[teacherId]) return null;
     const key = `${dayIndex}-${timeSlot}`;
-    const assigned = teacherSchedules[teacherId][key] || [];
-    const conflict = assigned.find((id) => id !== routineId);
+    const list = teacherSchedules[teacherId][key] || [];
+    const conflict = list.find((id) => id !== routineId);
     if (conflict) return routines.indexOf(conflict) + 1;
     return null;
   };
 
+  // Render
   return (
     <div className="routine-manager">
       <h1>Routine Manager</h1>

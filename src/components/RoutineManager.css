@@ -1,3 +1,8 @@
+/* src/components/RoutineManager.css */
+.routine-manager {
+  padding: 20px;
+}
+
 .routine-manager h1 {
   font-size: 28px;
   margin-bottom: 10px;
@@ -8,72 +13,50 @@
   color: #666;
   margin-bottom: 20px;
 }
-/* src/components/RoutineManager.css */
-.routine-manager {
-  padding: 20px;
-}
 
 .add-routine-btn {
-  padding: 10px 20px;
+  padding: 12px 24px;
   font-size: 16px;
-  background-color: #4caf50;
+  background-color: #2196f3;
   color: white;
   border: none;
   border-radius: 8px;
   margin-bottom: 20px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  font-weight: 500;
+  transition: background-color 0.2s ease-in-out;
 }
 
 .add-routine-btn:hover {
-  background-color: #45a049;
+  background-color: #1976d2;
 }
 
 .routine-block {
-  border: 2px solid #ccc;
-  border-radius: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
   padding: 20px;
   margin-bottom: 30px;
   background-color: #f9f9f9;
 }
+
 .routine-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.5rem;
-}
-
-.add-routine-btn {
-  margin: 1rem 0;
-  background-color: #2196f3;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 8px 14px;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background-color 0.2s ease-in-out;
-}
-.add-routine-btn:hover {
-  background-color: #1976d2;
+  align-items: center;
+  margin-bottom: 15px;
 }
 
 .btn-delete-routine {
   background-color: #e53935;
   color: white;
   border: none;
-  border-radius: 4px;
-  padding: 6px 10px;
+  border-radius: 6px;
+  padding: 8px 16px;
   cursor: pointer;
+  font-weight: 500;
   transition: background-color 0.2s ease-in-out;
 }
+
 .btn-delete-routine:hover {
   background-color: #b71c1c;
-}
-
-.routine-block {
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 12px;
-  margin-bottom: 1rem;
 }
