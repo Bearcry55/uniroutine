@@ -1,102 +1,126 @@
 // src/components/RoutineManager.jsx
-import React, { useState } from 'react';
-import RoutineTable from './table';
-import './RoutineManager.css';
+import React, { useState } from "react";
+import RoutineTable from "./table";
+import "./RoutineManager.css";
 
 function RoutineManager() {
   const [routines, setRoutines] = useState([1]); // Start with one routine
-  
+
   // Track teacher assignments across all routines
-  // Format: { "teacherId": { "time": ["routine1", "routine2"] } }
+  // Format: { teacherId: { "dayIndex-timeSlot": [routineIds] } }
   const [teacherSchedules, setTeacherSchedules] = useState({});
 
-  // Handler to add a new routine
+  // ➕ Add a new routine
   const handleAddRoutine = () => {
-    setRoutines(prev => [...prev, prev.length + 1]);
+    setRoutines((prev) => [...prev, prev.length + 1]);
   };
 
-  // Update teacher schedule when a teacher is assigned/removed
-  const updateTeacherSchedule = (routineId, dayIndex, timeSlot, teacherId, prevTeacherId = null) => {
-    setTeacherSchedules(prev => {
+  // 🗑️ Delete a routine and clean its assignments
+  const handleDeleteRoutine = (routineId) => {
+    if (!window.confirm("Are you sure you want to delete this routine?")) return;
+
+    // remove routine from list
+    setRoutines((prev) => prev.filter((id) => id !== routineId));
+
+    // clean teacherSchedules of this routine
+    setTeacherSchedules((prev) => {
       const updated = { ...prev };
-      
-      // Remove previous teacher assignment if exists
-      if (prevTeacherId && updated[prevTeacherId]) {
-        const key = `${dayIndex}-${timeSlot}`;
-        if (updated[prevTeacherId][key]) {
-          updated[prevTeacherId][key] = updated[prevTeacherId][key].filter(
-            id => id !== routineId
+      Object.keys(updated).forEach((teacherId) => {
+        Object.keys(updated[teacherId]).forEach((timeKey) => {
+          updated[teacherId][timeKey] = updated[teacherId][timeKey].filter(
+            (id) => id !== routineId
           );
-          // Clean up empty arrays
-          if (updated[prevTeacherId][key].length === 0) {
-            delete updated[prevTeacherId][key];
-          }
-          // Clean up empty teacher objects
-          if (Object.keys(updated[prevTeacherId]).length === 0) {
-            delete updated[prevTeacherId];
-          }
-        }
-      }
-      
-      // Add new teacher assignment
-      if (teacherId) {
-        const key = `${dayIndex}-${timeSlot}`;
-        if (!updated[teacherId]) {
-          updated[teacherId] = {};
-        }
-        if (!updated[teacherId][key]) {
-          updated[teacherId][key] = [];
-        }
-        if (!updated[teacherId][key].includes(routineId)) {
-          updated[teacherId][key].push(routineId);
-        }
-      }
-      
+          if (updated[teacherId][timeKey].length === 0)
+            delete updated[teacherId][timeKey];
+        });
+        if (Object.keys(updated[teacherId]).length === 0)
+          delete updated[teacherId];
+      });
       return updated;
     });
   };
 
-  // Check if a teacher is available for a specific time slot
-  const isTeacherAvailable = (routineId, dayIndex, timeSlot, teacherId) => {
-    if (!teacherSchedules[teacherId]) return true;
-    
-    const key = `${dayIndex}-${timeSlot}`;
-    const assignments = teacherSchedules[teacherId][key] || [];
-    
-    // Teacher is available if not assigned anywhere or only assigned to current routine
-    return assignments.length === 0 || 
-           (assignments.length === 1 && assignments[0] === routineId);
+  // 🔄 Update teacher schedule when assigning/removing
+  const updateTeacherSchedule = (
+    routineId,
+    dayIndex,
+    timeSlot,
+    teacherId,
+    prevTeacherId = null
+  ) => {
+    setTeacherSchedules((prev) => {
+      const updated = { ...prev };
+
+      // remove previous teacher assignment if it exists
+      if (prevTeacherId && updated[prevTeacherId]) {
+        const key = `${dayIndex}-${timeSlot}`;
+        if (updated[prevTeacherId][key]) {
+          updated[prevTeacherId][key] = updated[prevTeacherId][key].filter(
+            (id) => id !== routineId
+          );
+          if (updated[prevTeacherId][key].length === 0)
+            delete updated[prevTeacherId][key];
+          if (Object.keys(updated[prevTeacherId]).length === 0)
+            delete updated[prevTeacherId];
+        }
+      }
+
+      // add new assignment
+      if (teacherId) {
+        const key = `${dayIndex}-${timeSlot}`;
+        if (!updated[teacherId]) updated[teacherId] = {};
+        if (!updated[teacherId][key]) updated[teacherId][key] = [];
+        if (!updated[teacherId][key].includes(routineId))
+          updated[teacherId][key].push(routineId);
+      }
+
+      return updated;
+    });
   };
 
-  // Get conflicting routine for a teacher at a specific time
+  // ✅ Check teacher availability
+  const isTeacherAvailable = (routineId, dayIndex, timeSlot, teacherId) => {
+    if (!teacherSchedules[teacherId]) return true;
+    const key = `${dayIndex}-${timeSlot}`;
+    const assigned = teacherSchedules[teacherId][key] || [];
+    return (
+      assigned.length === 0 ||
+      (assigned.length === 1 && assigned[0] === routineId)
+    );
+  };
+
+  // ⚠️ Find conflicting routine for a teacher
   const getConflictingRoutine = (routineId, dayIndex, timeSlot, teacherId) => {
     if (!teacherSchedules[teacherId]) return null;
-    
     const key = `${dayIndex}-${timeSlot}`;
-    const assignments = teacherSchedules[teacherId][key] || [];
-    
-    const conflictingRoutineId = assignments.find(id => id !== routineId);
-    if (conflictingRoutineId) {
-      return routines.indexOf(conflictingRoutineId) + 1; // Return routine number (1-based)
-    }
+    const assigned = teacherSchedules[teacherId][key] || [];
+    const conflict = assigned.find((id) => id !== routineId);
+    if (conflict) return routines.indexOf(conflict) + 1;
     return null;
   };
 
   return (
     <div className="routine-manager">
       <h1>Routine Manager</h1>
-      <p>Use the table(s) below to view, edit, and download routines.</p>
+      <p>Use the tables below to add, view, edit, and delete routines.</p>
 
-      {/* Add Routine Button */}
       <button className="add-routine-btn" onClick={handleAddRoutine}>
-        ➕ Add New Routine
+        Add New Routine
       </button>
 
-      {/* Render one RoutineTable per routine */}
       {routines.map((id, index) => (
         <div className="routine-block" key={id}>
-          <h2>Routine {index + 1}</h2>
-          <RoutineTable 
+          <div className="routine-header">
+            <h2>Routine {index + 1}</h2>
+            <button
+              className="btn-delete-routine"
+              onClick={() => handleDeleteRoutine(id)}
+            >
+              Delete
+            </button>
+          </div>
+
+          <RoutineTable
             routineId={id}
             routineNumber={index + 1}
             updateTeacherSchedule={updateTeacherSchedule}
